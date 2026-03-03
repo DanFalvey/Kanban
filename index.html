@@ -279,7 +279,7 @@
             <div class="sdot" id="sdot"></div>
             <span class="sync-label" id="stext">Connecting…</span>
         </div>
-        <button class="btn btn-ghost btn-icon" onclick="syncNow()" title="Sync now">↻</button>
+        <button class="btn btn-ghost btn-icon" onclick="syncNow(true)" title="Sync now">↻</button>
         <button class="btn btn-ghost btn-icon" onclick="openSettings()" title="Settings">⚙</button>
         <button class="btn btn-ghost btn-icon" onclick="openColModal()" title="Add column">+</button>
     </div>
@@ -487,7 +487,9 @@ function showSetupErr(m){const e=document.getElementById('setupErr');e.textConte
 function launchApp(){
     document.getElementById('setupOverlay').classList.remove('active');
     document.getElementById('hBinId').textContent='Bin: '+cfg.bin.slice(0,8)+'…';
-    renderBoard(); setStatus('ok','Connected'); showToast('Board loaded');
+    renderBoard(); setStatus('busy','Loading…');
+    // Auto-sync on every launch so the board is always up to date
+    syncNow(false);
 }
 
 // JSONBin
@@ -506,10 +508,15 @@ async function pushBoard(){
     catch(e){ setStatus('error','Save failed'); showToast('Save failed: '+e.message,'error'); }
     finally{ saving=false; }
 }
-async function syncNow(){
+async function syncNow(showToast_=true){
     if(!cfg.key||!cfg.bin)return;
     setStatus('busy','Syncing…');
-    try{ const r=await jbFetch(`${API}/${cfg.bin}/latest`,'GET'); board=r.record; renderBoard(); setStatus('ok','Synced'); showToast('Board synced'); }
+    try{
+        const r=await jbFetch(`${API}/${cfg.bin}/latest`,'GET');
+        if(r.record) board=r.record;
+        renderBoard(); setStatus('ok','Synced');
+        if(showToast_) showToast('Board synced');
+    }
     catch(e){ setStatus('error','Sync failed'); showToast('Sync failed: '+e.message,'error'); }
 }
 function saveBoard(){ clearTimeout(saveTimer); setStatus('busy','Saving…'); saveTimer=setTimeout(pushBoard,800); }
@@ -545,7 +552,12 @@ function initDnd(){
     });
     document.querySelectorAll('.tasks').forEach(z=>{
         z.addEventListener('dragover',e=>{e.preventDefault();e.currentTarget.classList.add('drag-over');});
-        z.addEventListener('dragleave',e=>e.currentTarget.classList.remove('drag-over'));
+        z.addEventListener('dragleave',e=>{
+            // Only remove highlight when truly leaving the zone, not when entering a child element
+            if(!e.currentTarget.contains(e.relatedTarget)){
+                e.currentTarget.classList.remove('drag-over');
+            }
+        });
         z.addEventListener('drop',e=>{
             e.preventDefault();e.currentTarget.classList.remove('drag-over');
             const tcid=e.currentTarget.dataset.columnId;let task=null;
@@ -606,7 +618,7 @@ function deleteCol(cid){const col=board.columns.find(c=>c.id===cid);if(!col)retu
 // Settings Modal
 function openSettings(){document.getElementById('sKey').value=cfg.key;document.getElementById('sBin').value=cfg.bin;document.getElementById('settingsModal').classList.add('active');}
 function closeSettings(){document.getElementById('settingsModal').classList.remove('active');}
-function applySettings(){cfg.key=document.getElementById('sKey').value.trim();cfg.bin=document.getElementById('sBin').value.trim();saveCfg();closeSettings();document.getElementById('hBinId').textContent='Bin: '+cfg.bin.slice(0,8)+'…';syncNow();}
+function applySettings(){cfg.key=document.getElementById('sKey').value.trim();cfg.bin=document.getElementById('sBin').value.trim();saveCfg();closeSettings();document.getElementById('hBinId').textContent='Bin: '+cfg.bin.slice(0,8)+'…';syncNow(true);}
 
 // Toast
 let tTimer;
